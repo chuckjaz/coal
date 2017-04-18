@@ -6,7 +6,8 @@ import {
   restoreTransaction,
   bindState,
   ensureReadable,
-  ensureWritable
+  ensureWritable,
+  PauseId
 } from '../index';
 
 
@@ -24,7 +25,7 @@ function transaction(f: () => void): any[] {
 }
 
 // Execute f in a transaction then pause it.
-function paused(f: () => void): number {
+function paused(f: () => void): PauseId {
   beginTransaction();
   try {
     f();
@@ -37,7 +38,7 @@ function paused(f: () => void): number {
 }
 
 // Continue a previously paused transaction, then pause it again.
-function continued(pauseId: number, f: () => void): number {
+function continued(pauseId: PauseId, f: () => void): PauseId {
   restoreTransaction(pauseId);
   try {
     f();
@@ -50,7 +51,7 @@ function continued(pauseId: number, f: () => void): number {
 }
 
 // Unpause a transaction, execute f in that transaction (if given), then commit the transaction.
-function unpaused(pauseId: number, f?: () => void): any[] {
+function unpaused(pauseId: PauseId, f?: () => void): any[] {
   restoreTransaction(pauseId);
   if (f) {
     try {
@@ -65,7 +66,7 @@ function unpaused(pauseId: number, f?: () => void): any[] {
 }
 
 // Unpause and abort a paused transaction.
-function abortPaused(pauseId: number): void {
+function abortPaused(pauseId: PauseId): void {
   restoreTransaction(pauseId);
   abortTransaction();
 }

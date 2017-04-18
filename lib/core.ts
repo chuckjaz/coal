@@ -1,3 +1,10 @@
+/**
+ * Bind a state to an object. This is a primitive that intializes the fields
+ * necessary to treat the `object` as a transacted object.
+ * 
+ * @param object The object to be bound
+ * @param state The state to bind.
+ */
 export function bindState(object: any, state: any): any {
   object._state = state;
   object._previous = state;
@@ -14,11 +21,26 @@ interface TransactionSet {
   [index: number]: Boolean;
 }
 
+/**
+ * The state of a frame. A frame maintains infomeration about the transaction.
+ */
 export type FrameState = "open" | "paused" | "aborted" | "committed";
 
+/**
+ * A frame is information and hooks for a transaction.
+ */
 export interface Frame {
+  /** The state of the transaction */
   state: FrameState;
+
+  /** Invoked if the transaction is aborted */
   onabort?: () => void;
+
+  /** 
+   * Invoked if the transaction is committed. 
+   * 
+   * @param changed a list of object that have been modified in the transaction
+   */
   oncommit?: (changed: any[]) => void;
 }
 
@@ -70,6 +92,9 @@ function isValid(id: number|undefined, current: number, invalid: TransactionSet)
   return false;
 }
 
+/**
+ * The base interface of a state object.
+ */
 export interface State {
   _min?: number;
   _max?: number;
@@ -79,6 +104,9 @@ export interface State {
   merge?(baseState: this, currentState: this): this;
 }
 
+/**
+ * The entity contract.
+ */
 export interface Entity<S extends State> {
   _transaction: number;
   _previous: S;
@@ -98,6 +126,11 @@ function findVisible<S extends State>(state: S, transactionId: number, invalid: 
   return state;
 }
 
+/**
+ * Ensure that `entity` is readable in the current transaction.
+ * 
+ * @param entity the entity to ensure is readable in this transaction
+ */
 export function ensureReadable<S extends State>(entity: Entity<S>): void {
   if (entity._transaction !== currentTransactionNumber) makeReadable(entity);
 }
@@ -108,6 +141,11 @@ function makeReadable<S  extends State>(entity: Entity<S>): void {
   entity._transaction = currentTransactionNumber;
 }
 
+/**
+ * Ensure the entity is writable in the current transaction.
+ * 
+ * @param entity the entity to ensure is writable in this transaction
+ */
 export function ensureWritable<S extends State>(entity: Entity<S>): void {
   if (entity._transaction !== currentTransactionNumber || entity._state._min !== currentTransactionNumber)
     makeWritable(entity);
@@ -157,6 +195,20 @@ function makeWritable<S extends State>(entity: Entity<S>) {
   stateObjectsWithPredecessors.push(newState);
 }
 
+/**
+ * A token representing a paused transaction. Returned by `pauseTransaction()`
+ * and accepted by `restoreTransaction()`.
+ */
+export type PauseId = number & { _pauseBrand: any };
+
+/**
+ * Start a transaction. 
+ * 
+ * Precondition: not in a transactrion
+ * 
+ * @param oncommit invoked if the transaction is committed
+ * @param onabort invoked if the transaction is aborted.
+ */
 export function beginTransaction(oncommit?: (changed: any[]) => void , onabort?: () => void): Frame {
   validateNotInTransaction();
   currentTransactionNumber = ++highestTransaction;
@@ -168,7 +220,13 @@ export function beginTransaction(oncommit?: (changed: any[]) => void , onabort?:
   return frame;
 }
 
-export function pauseTransaction(): number {
+/**
+ * Pause a transaction and turns a pauseId id which would allow it
+ * to be restored.
+ * 
+ * Precondition: in a transaction.
+ */
+export function pauseTransaction(): PauseId {
   validateInTransaction();
   const pausedId = pausedTransactions.length;
   pausedTransactions.push(currentTransaction);
@@ -176,10 +234,17 @@ export function pauseTransaction(): number {
   currentTransaction = emptyObject;
   currentTransactionNumber = highestCommittedTransaction;
   assertNotInTransaction();
-  return pausedId;
+  return pausedId as PauseId;
 }
 
-export function restoreTransaction(pausedId: number): void {
+/**
+ * Restores a paused transaction.
+ * 
+ * Precondition: not in a transaction.
+ * 
+ * @param pausedId A pauseId for the transaction to restore
+ */
+export function restoreTransaction(pausedId: PauseId): void {
   assertNotInTransaction();
   const pausedTransaction = pausedTransactions[pausedId];
   if (!pausedTransaction || openTransactions[pausedTransaction.number!] !== "open") throw new Error("Invalid paused transaction");
@@ -190,6 +255,12 @@ export function restoreTransaction(pausedId: number): void {
   assertInTransaction();
 }
 
+
+/**
+ * Abort the current transaction.
+ * 
+ * Precondition: in a transaction.
+ */
 export function abortTransaction() {
   validateInTransaction();
   openTransactions[currentTransactionNumber] = "aborted";
@@ -202,6 +273,13 @@ export function abortTransaction() {
   if (frame.onabort) frame.onabort;
 }
 
+/**
+ * Commit the current transaction and return a list of the modified
+ * entities.
+ * 
+ * Precondition: in a transaction
+ * Throws if a merge conflict is detected and the transaction is aborted.
+ */
 export function commitTransaction(): any[] {
   const frame = currentTransaction.frame!;
   let mutated: any[] | null = null;
