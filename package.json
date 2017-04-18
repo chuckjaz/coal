@@ -1,0 +1,19 @@
+{
+  "name": "coal",
+  "version": "0.1.0",
+  "description": "Transacted objects",
+  "main": "dist/index.js",
+  "scripts": {
+    "pretest": "tsc -p .",
+    "test": "mocha dist/**/*.js",
+    "test-debug": "mocha --debug-brk dist/**/*.js",
+    "build": "tsc -p ."
+  },
+  "author": "chuckj@google.com",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/mocha": "^2.2.41",
+    "mocha": "^2.4.5",
+    "typescript": "^2.2"
+  }
+}
